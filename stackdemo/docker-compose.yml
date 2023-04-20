@@ -1,0 +1,98 @@
+version: "3.9"
+
+services:
+  web:
+    image: 127.0.0.1:5000/stackdemo
+    build: .
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 50M
+        reservations:
+          cpus: '0.50'
+          memory: 50M
+  redis:
+    image: redis:alpine
+    deploy:
+      placement:
+        constraints: [node.hostname == node-02]
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 50M
+        reservations:
+          cpus: '0.50'
+          memory: 50M
+    volumes:
+      - redis_data:/data
+  ngnix-server:
+    image: nginx:1.23
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 50M
+        reservations:
+          cpus: '0.50'
+          memory: 50M
+    ports: 
+      - "443:443"
+    volumes: 
+      - './ngnix.conf:/etc/nginx/nginx.conf'
+    depends_on: 
+      - web
+    secrets:
+      - certificate.pem
+      - key.pem
+  metabase:
+    image: metabase/metabase:latest
+    deploy:
+      replicas: 1
+  postgresql-master:
+    image: docker.io/bitnami/postgresql:14
+    deploy:
+      placement:
+        constraints: [node.hostname == node-02]
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 250M
+        reservations:
+          cpus: '0.50'
+          memory: 250M
+    ports:
+      - '5432'
+    volumes:
+      - 'postgresql_master_data:/bitnami/postgresql'
+    env_file:
+      - 'postgresql-master.env'
+  postgresql-slave:
+    image: docker.io/bitnami/postgresql:14
+    deploy:
+      placement:
+        constraints: [node.hostname == node-03]
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 250M
+        reservations:
+          cpus: '0.50'
+          memory: 250M
+    ports:
+      - '5432'
+    depends_on:
+      - postgresql-master
+    env_file:
+      - 'postgresql-slave.env'
+secrets:
+  certificate.pem:
+    file: ./certificate.pem
+  key.pem:
+    file: ./key.pem
+volumes:
+  postgresql_master_data:
+    driver: local
+  redis_data:
+    driver: local
